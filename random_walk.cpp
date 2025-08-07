@@ -65,7 +65,46 @@ void walker_process()
     //       "Rank X: Walker finished in Y steps."
     //    b. Send an integer message to the controller (rank 0) to signal completion.
     //    c. Break the loop.
+
+
+
+    srand(time(NULL) + world_rank);  // Unique seed
+
+    int position = 0;
+    int steps = 0;
+
+    while (steps < max_steps)
+    {
+        int move = (rand() % 2 == 0) ? -1 : 1;
+        position += move;
+        steps++;
+
+        if (position < -domain_size || position > domain_size)
+        {
+            break;
+        }
+    }
+
+    // Ordered printing using token passing
+    if (world_rank > 1)
+    {
+        int token;
+        MPI_Status status;
+        MPI_Recv(&token, 1, MPI_INT, world_rank - 1, 1, MPI_COMM_WORLD, &status);
+    }
+
+    std::cout << "Rank " << world_rank << ": Walker finished in " << steps << " steps." << std::endl;
+
+    if (world_rank < world_size - 1)
+    {
+        int token = 1;
+        MPI_Send(&token, 1, MPI_INT, world_rank + 1, 1, MPI_COMM_WORLD);
+    }
+
+    MPI_Send(&steps, 1, MPI_INT, 0, 0, MPI_COMM_WORLD);  // Notify controller
 }
+
+
 
 void controller_process()
 {
@@ -76,4 +115,22 @@ void controller_process()
     //    a message from any walker that finishes.
     // 4. After receiving messages from all walkers, print a final summary message.
     //    For example: "Controller: All X walkers have finished."
+
+    
+    int num_walkers = world_size - 1;
+
+    // Start token passing by sending to rank 1
+    int token = 1;
+    MPI_Send(&token, 1, MPI_INT, 1, 1, MPI_COMM_WORLD);
+
+    for (int i = 0; i < num_walkers; ++i)
+    {
+        int recv_steps;
+        MPI_Status status;
+        MPI_Recv(&recv_steps, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &status);
+        // Optional: collect recv_steps
+    }
+
+    std::cout << "Controller: All " << num_walkers << " walkers have finished." << std::endl;
 }
+
